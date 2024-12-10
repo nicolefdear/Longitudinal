@@ -72,6 +72,10 @@ label val agec agec
 label var agec "Age at visit"
 label var agev "Age at visit"
 
+*age at enrollment
+gen enroll_age=agev if visit==1
+bysort subjid: carryforward enroll_age, replace
+
 *age at HIV diagnosis
 gen agedxc=(diagdtn-dobdtn)/365.25
 
@@ -87,14 +91,15 @@ label var agedx "Age at Diagnosis"
 
 *era of HIV diagnosis
 gen erayear=year(diagdtn)
-gen era=1 if erayear<2006 
-replace era=2 if erayear>=2006 & erayear<2010
-replace era=3 if erayear>=2010 & erayear<2013
-replace era=4 if erayear>=2013 & erayear<2016
-replace era=5 if erayear>=2016 & erayear!=.
-label define era 1 "Prior to 2006" 2 "2006-2009" 3 "2010-2012" 4 "2013-2015" 5 "2016 onwards"
-label val era era
-label var era "Era of HIV diagnosis"
+
+// gen era=1 if erayear<2006 
+// replace era=2 if erayear>=2006 & erayear<2010
+// replace era=3 if erayear>=2010 & erayear<2013
+// replace era=4 if erayear>=2013 & erayear<2016
+// replace era=5 if erayear>=2016 & erayear!=.
+// label define era 1 "Prior to 2006" 2 "2006-2009" 3 "2010-2012" 4 "2013-2015" 5 "2016 onwards"
+// label val era era
+// label var era "Era of HIV diagnosis"
 
 gen era2=1 if erayear<2016
 replace era2=2 if erayear>=2016 & erayear!=.
@@ -102,7 +107,7 @@ label define era2 1 "Prior to 2016" 2 "2016 onwards"
 label val era2 era2
 label var era2 "Era of HIV diagnosis"
 
-*collapse education
+*collapse education (free text cleaned in SAS before export)
 gen edu_cat=0 if educat==0 | educat==1
 replace edu_cat=1 if educat==3 | educat==2
 replace edu_cat=2 if educat>3 & educat!=.
@@ -115,15 +120,6 @@ label val edu_cat edu_cat
 label def preg_out 1 "Live birth" 2 "Abortion" 3 "Stillbirth" 4 "Ongoing" 90 "Other"
 label val preg_out preg_out
 
-*maternal age at delivery categories
-egen matage=cut(age_del), at(13,20,35,54)
-replace matage=1 if matage==13
-replace matage=2 if matage==20
-replace matage=3 if matage==35
-label def matage 1 "13-19" 2 "20-34" 3"35+"
-label val matage matage
-label var matage "Age at delivery (years)"
-
 *fill in missing delivery date using age at delivery and mom DOB
 gen deldt_imp = (dobdtn + (age_del*365.25)) if deldt==. & age_del!=.
 format deldt_imp %td
@@ -133,43 +129,11 @@ replace deldt=deldt_imp if deldt==. & age_del!=.
 gen deldt_yr=year(deldt)
 label var deldt_yr "Year of delivery"
 
-// xtile delivery_year_quartile = deldt_yr, n(4)
-// tab deldt_yr delivery_year_quartile
-egen del_year_cat0=cut(deldt_yr), at(1970,2011,2015,2019,2024)
-gen del_year_cat=1 if del_year_cat0==1970
-replace del_year_cat=2 if del_year_cat0==2011
-replace del_year_cat=3 if del_year_cat0==2015
-replace del_year_cat=4 if del_year_cat0==2019
+*fill in missing age at delivery using delivery date and mom DOB
+gen age_del_imp = (deldt - dobdtn) / 365.25 if deldt!=. & age_del==.
+replace age_del=age_del_imp if deldt!=. & age_del==.
 
-label def del_year_cat 1 "1970-2010" 2 "2011-2014" 3 "2015-2018" 4 "2019-2023"
-label val del_year_cat del_year_cat
-label var del_year_cat "Year of delivery (quartiles)"
-
-*gravida and parity
-// xtile gravida_quartile = gravida if gravida!=0, n(4)
-// tab gravida gravida_quartile
-egen gravida_cat0=cut(gravida), at(1,3,5,6,20)
-gen gravida_cat=1 if gravida_cat0==1
-replace gravida_cat=2 if gravida_cat0==3
-replace gravida_cat=3 if gravida_cat0==5
-replace gravida_cat=4 if gravida_cat0==6
-
-label def gravida_cat 1 "1-2" 2 "3-4" 3 "5" 4 "6+"
-label val gravida_cat gravida_cat
-label var gravida_cat "Number of pregnancies (gravida)"
-
-// xtile para_quartile = para if para!=0, n(4)
-// tab para para_quartile
-egen para_cat0=cut(para), at(1,3,4,6,20)
-gen para_cat=1 if para_cat0==1
-replace para_cat=2 if para_cat0==3
-replace para_cat=3 if para_cat0==4
-replace para_cat=4 if para_cat0==6
-
-label def para_cat 1 "1-2" 2 "3" 3 "4-5" 4 "6+"
-label val para_cat para_cat
-label var para_cat "Number of live births (parity)"
-
+*apply formats
 label def yn 0 "No" 1 "Yes" 5 "NA" 7 "Unknown"
 label val d_skill yn
 label var d_skill "Delivery by skilled birth attendant"
@@ -182,19 +146,31 @@ label def delivmet 0 "Vaginal" 1 "C-section"
 label val delivmet delivmet
 label var delivmet "Delivery method"
 
-replace flsupx=7 if flsupx==.
+replace flsupx=. if flsupx==7
 label val flsupx yn
 label var flsupx "Folate supplement prescribed"
 
-replace pmtct=7 if pmtct==.
-label val pmtct yn
-label var pmtct "PMTCT services accessed"
-
-replace iptrxyn=7 if iptrxyn==.
+replace iptrxyn=. if iptrxyn==7
 label val iptrxyn yn
 label var iptrxyn "IPT with Sulfadoxine/Pyrimethamine prescribed"
 
-*collpase missing and NA responses into unknown category -- not sure what NA really means here since all moms LWH
+replace pmtct=. if pmtct==7
+label val pmtct yn
+label var pmtct "PMTCT services accessed"
+
+gen pmtct_period=0 if pmtct==0
+replace pmtct_period=1 if pmtct==1 & pmtct_a==1 & pmtct_b!=1 & pmtct_c!=1
+replace pmtct_period=2 if pmtct==1 & pmtct_a!=1 & pmtct_b==1 & pmtct_c!=1
+replace pmtct_period=3 if pmtct==1 & pmtct_a!=1 & pmtct_b!=1 & pmtct_c==1
+replace pmtct_period=4 if pmtct==1 & pmtct_a==1 & pmtct_b==1 & pmtct_c!=1
+replace pmtct_period=5 if pmtct==1 & pmtct_a==1 & pmtct_b!=1 & pmtct_c==1
+replace pmtct_period=6 if pmtct==1 & pmtct_a!=1 & pmtct_b==1 & pmtct_c==1
+replace pmtct_period=7 if pmtct==1 & pmtct_a==1 & pmtct_b==1 & pmtct_c==1
+
+label def pmtct_period 0 "No PMTCT" 1 "PMTCT services accessed before delivery" 2 "PMTCT services accessed at time of delivery" 3 "PMTCT services accessed postpartum" 4 "PMTCT services accessed before delivery and at time of delivery" 5 "PMTCT services accessed before delivery and postpartum" 6 "PMTCT services accessed at time of delivery and postpartum" 7 "PMTCT services accessed before delivery, at time of delivery and postpartum"
+label val pmtct_period pmtct_period
+
+*collpase missing and NA responses into unknown category
 replace def_hiv=7 if def_hiv==.
 replace def_hiv=7 if def_hiv==5
 label def def_hiv 0 "HIV-" 1 "HIV+" 7 "Unknown"
@@ -207,23 +183,22 @@ gen infantfeed=0 if feed==0
 replace infantfeed=1 if feed_met==1
 replace infantfeed=2 if feed_met==2
 replace infantfeed=3 if feed_met==3
-replace infantfeed=4 if infantfeed==.
 
-label def infantfeed 0 "Mother not counseled on infant feeding" 1 "Exclusive breastfeeding" 2 "Exclusive replacement feeding" 3 "Mixed" 4 "Unknown"
+label def infantfeed 0 "Mother not counseled on infant feeding" 1 "Exclusive breastfeeding" 2 "Exclusive replacement feeding" 3 "Mixed"
 label val infantfeed infantfeed
 label var infantfeed "Infant feeding method mother counseled on"
 
 *mom dx with HIV during pregnancy
 gen agedxr=trunc(agedxc)
 
-gen mom_hivstatus=1 if mpristat==1 | (agedxr < age_del & agedxr!=. & age_del!=.)
+gen mom_hivstatus=1 if mpristat==1 | ((agedxr < age_del) & (agedxr!=. & age_del!=.))
 replace mom_hivstatus=2 if mom_hiv==1
 
 label def mom_hivstatus 1 "Known HIV+ (HIV dx prior to pregnancy)" 2 "Newly dx with HIV during pregnancy"
 label val mom_hivstatus mom_hivstatus
 label var mom_hivstatus "Timing of mom HIV diagnosis"
 
-gen mom_hivstatus2=1 if mpristat==1 | (agedxr < age_del & agedxr!=. & age_del!=.)
+gen mom_hivstatus2=1 if mpristat==1 | ((agedxr < age_del) & (agedxr!=. & age_del!=.))
 replace mom_hivstatus2=2 if mom_hiv==1 & hiv_when==1
 replace mom_hivstatus2=3 if mom_hiv==1 & hiv_when==2
 replace mom_hivstatus2=4 if mom_hiv==1 & hiv_when==3
@@ -265,6 +240,9 @@ replace prior_preterm=0 if prior_preterm==.
 label def prior_preterm 0 "No prior history of preterm birth" 1 "Prior history of preterm birth"
 label val prior_preterm prior_preterm
 label var prior_preterm "Prior history of preterm birth"
+
+*resort by subjid and visit
+// gsort subjid visit
 
 *infant mortality
 gen deathdt_num = date(deathdt, "DMY")
@@ -346,7 +324,7 @@ replace infant_art=3 if (def_hiv==1 | def_hiv==7) & chd_arv==1 & (childartconcat
 replace infant_art=4 if (def_hiv==1 | def_hiv==7) & chd_arv==1 & (childartconcat=="SD NVP" | childartconcat=="NEVIRAPINE FOR 12 WE" | childartconcat=="NVP SYRUP")
 replace infant_art=5 if (def_hiv==1 | def_hiv==7) & chd_arv==1 & (childartconcat=="SD NVPAZT" | childartconcat=="SD NVPAZTSEPTRIN")
 replace infant_art=6 if (def_hiv==1 | def_hiv==7) & chd_arv==1 & (childartconcat=="3TCAZT" | childartconcat=="AZT" | childartconcat=="Continuous NVP3TCAZT" | childartconcat=="SD NVP3TCAZT" | childartconcat=="SD NVPContinuous NVP" | childartconcat=="SD NVPContinuous NVPAZT" | childartconcat=="SD NVPContinuous NVPAZTCTX" | childartconcat=="SD NVPTriple ARV" | childartconcat=="Triple ARV" | childartconcat=="Unknown" | childartconcat=="")
-replace infant_art=7 if (chd_arv==5 | chd_arv==7 | chd_arv==.)
+replace infant_art=7 if (def_hiv==1 | def_hiv==7) & (chd_arv==5 | chd_arv==7 | chd_arv==.)
 
 label def infant_art 0 "Child HIV-" 1 "ARV not prescribed" 2 "Continuous NVP" 3 "Continuous NVP + AZT" 4 "Single dose NVP" 5 "Single dose NVP + AZT" 6 "Other/unspecified ARV" 7 "ARV status unknown"
 label val infant_art infant_art
@@ -377,7 +355,7 @@ format enrollmentdate %td
 bysort subjid: carryforward enrollmentdate, replace
 
 gen studypreg=0
-replace studypreg=1 if preg_out==1 & deldt>enrollmentdate
+replace studypreg=1 if preg_out==1 & (deldt>enrollmentdate) & (deldt!=. & enrollmentdate!=.)
 label def studypreg 0 "Prior to enrollment" 1 "During follow-up"
 label val studypreg studypreg
 label var studypreg "Pregnancy occurred"
@@ -412,6 +390,8 @@ gsort subjid deldt
 bysort subjid: gen flag2=1 if (deldt-deldt[_n-1]<280) & (preg_out==1 & preg_out[_n-1]==1) & deldt!=.
 drop if flag2==1
 
+// gsort subjid visit
+
 *drop pregnancies missing delivery date unless still ongoing (n=17)
 keep if preg_out==4 | (inlist(preg_out,1,2,3,90) & deldt!=.)
 
@@ -422,10 +402,26 @@ keep if preg_out==4 | (inlist(preg_out,1,2,3,90) & deldt!=.)
 gen flag3=1 if deldt<diagdtn & deldt!=. & diagdtn!=.
 drop if flag3==1
 
+*drop those with missing HIV diagnosis date
+drop if diagdtn==.
+
+*drop those with missing delivery date
+drop if deldt==.
+
 *how many pregnancies total?
 tab preg_out nbirth, missing
 tab preg_out, missing
+	
+	*among how many women?
+	bysort subjid: gen seq_w=_n
+	tab seq_w, missing
 
+	*age at enrollment among the n=618 women
+	tabstat enroll_age if seq_w==1, stats (p25 p50 p75 mean sd n)
+	
+	*age at first pregnancy among the n=618 women
+	tabstat agev if seq_w==1, stats (p25 p50 p75 mean sd n)
+	
 *keep singleton births (n=7 multiple births dropped)
 drop if nbirth==2|nbirth==3
 
@@ -440,25 +436,59 @@ tab n
 
 tab studypreg
 
+*additional data categorization -----
+xtile delivery_year_quartile = deldt_yr, n(4)
+tab deldt_yr delivery_year_quartile
+
+label def delivery_year_quartile 1 "1994-2010" 2 "2011-2015" 3 "2016-2018" 4 "2019-2023"
+label val delivery_year_quartile delivery_year_quartile
+label var delivery_year_quartile "Year of delivery (quartiles)"
+
+*gravida and parity
+xtile gravida_quartile = gravida, n(4)
+tab gravida gravida_quartile
+
+label def gravida_quartile 1 "1-2" 2 "3" 3 "4-5" 4 "6+"
+label val gravida_quartile gravida_quartile
+label var gravida_quartile "Number of pregnancies (gravida)"
+
+xtile para_quartile = para, n(4)
+tab para para_quartile
+
+label def para_quartile 1 "1-2" 2 "3" 3 "4-5" 4 "6+"
+label val para_quartile para_cat
+label var para_quartile "Number of live births (parity)"
+
+*maternal age at delivery categories
+gen matage=1 if age_del<20 & age_del!=.
+replace matage=2 if age_del>=20 & age_del<35
+replace matage=3 if age_del>=35 & age_del!=.
+
+label def matage 1 "Under 20" 2 "20-34" 3 "35+"
+label val matage matage
+label var matage "Age at delivery (years)"
+
+*range of delivery dates
+tab deldt
+
 /*****************************************************************************
 ANALYSIS TABLES
 *****************************************************************************/
 *table 1
-table1_mc, by(studypreg) vars(progid cat \ matage cat \ del_year_cat cat \ edu_cat cat \ era2 cat \ gravida conts \ gravida_cat cat \ para conts \ para_cat cat \ pmtct cat \ flsupx cat \ iptrxyn cat \ infantfeed cat \ mom_hivstatus cat \ mom_hivstatus2 cat \ mom_art cat \ d_skill cat \ d_place cat \ delivmet cat \ def_hiv cat \ infant_art cat \ prior_preterm cat \ gest37 cat \ chldmort cat) onecol test missing total(b) format(%2.1f) sav("pmtct_table1a.xlsx", replace)
+// table1_mc, by(studypreg) vars(progid cat \ matage cat \ delivery_year_quartile cat \ edu_cat cat \ era2 cat \ gravida conts \ gravida_quartile cat \ para conts \ para_quartile cat \ pmtct cat \ pmtct_period cat \ flsupx cat \ iptrxyn cat \ infantfeed cat \ mom_hivstatus cat \ mom_hivstatus2 cat \ mom_art cat \ d_skill cat \ d_place cat \ delivmet cat \ def_hiv cat \ infant_art cat \ prior_preterm cat \ gest37 cat \ chldmort cat) onecol test missing total(b) format(%2.1f) sav("pmtct_table1.xlsx", replace)
 
-table1_mc, by(country) vars(matage cat \ del_year_cat cat \ edu_cat cat \ era2 cat \ gravida conts \ gravida_cat cat \ para conts \ para_cat cat \ pmtct cat \ flsupx cat \ iptrxyn cat \ infantfeed cat \ mom_hivstatus cat \ mom_hivstatus2 cat \ mom_art cat \ d_skill cat \ d_place cat \ delivmet cat \ def_hiv cat \ infant_art cat \ prior_preterm cat \ gest37 cat \ chldmort cat) onecol test missing total(b) format(%2.1f) sav("pmtct_table1b.xlsx", replace)
+table1_mc, by(country) vars(studypreg cat \ matage cat \ delivery_year_quartile cat \ edu_cat cat \ era2 cat \ gravida conts \ gravida_quartile cat \ para conts \ para_quartile cat \ pmtct cat \ pmtct_period cat \ flsupx cat \ iptrxyn cat \ infantfeed cat \ mom_hivstatus cat \ mom_hivstatus2 cat \ mom_art cat \ d_skill cat \ d_place cat \ delivmet cat \ def_hiv cat \ infant_art cat \ prior_preterm cat \ gest37 cat \ chldmort cat) onecol test missing total(b) format(%2.1f) sav("pmtct_table1.xlsx", replace)
 
 *create flag for complete cases
-gen cc=1 if progid!=. & matage!=. & del_year_cat!=. & edu_cat!=. & gravida!=. & para!=. & era2!=. & mom_hivstatus!=. & d_skill!=. & preterm!=.
+gen cc=1 if progid!=. & matage!=. & delivery_year_quartile!=. & edu_cat!=. & gravida!=. & para!=. & era2!=. & mom_hivstatus!=. & d_skill!=. & preterm!=.
 tab cc
 
 *table 2: preterm birth
 tab hivflag if cc==1
-tab n if cc==1
 
 logit preterm i.progid if cc==1, vce(cluster subjid) or
 logit preterm ib2.matage if cc==1, vce(cluster subjid) or
-logit preterm i.del_year_cat if cc==1, vce(cluster subjid) or
+logit preterm i.delivery_year_quartile if cc==1, vce(cluster subjid) or
 logit preterm ib2.edu_cat if cc==1, vce(cluster subjid) or
 logit preterm gravida if cc==1, vce(cluster subjid) or
 logit preterm para if cc==1, vce(cluster subjid) or
@@ -468,18 +498,19 @@ logit preterm ib1.d_skill if cc==1, vce(cluster subjid) or
 // logit preterm i.prior_preterm if cc==1, vce(cluster subjid) or /* some cell counts = 0, model does not converge */
 
 *fully adjusted model
-logit preterm i.progid ib2.matage i.del_year_cat ib2.edu_cat gravida para ib2.era2 i.mom_hivstatus ib1.d_skill if cc==1, vce(cluster subjid) or
+logit preterm i.progid ib2.matage i.delivery_year_quartile ib2.edu_cat gravida para ib2.era2 i.mom_hivstatus ib1.d_skill if cc==1, vce(cluster subjid) or
 
 *try backward stepwise selection
-stepwise, pr(.2) pe(.1): logit preterm (i.progid) (ib2.matage) (i.del_year_cat) (ib2.edu_cat) gravida para (ib2.era2) (i.mom_hivstatus) (ib1.d_skill) if cc==1, vce(cluster subjid) or
+stepwise, pr(.2) pe(.1): logit preterm (i.progid) (ib2.matage) (i.delivery_year_quartile) (ib2.edu_cat) gravida para (ib2.era2) (i.mom_hivstatus) (ib1.d_skill) if cc==1, vce(cluster subjid) or
 
 *force program site in the model
-stepwise, pr(.2) pe(.1) lockterm1: logit preterm (i.progid) (ib2.matage) (i.del_year_cat) (ib2.edu_cat) gravida para (ib2.era2) (i.mom_hivstatus) (ib1.d_skill) if cc==1, vce(cluster subjid) or
+stepwise, pr(.2) pe(.1) lockterm1: logit preterm (i.progid) (ib2.matage) (i.delivery_year_quartile) (ib2.edu_cat) gravida para (ib2.era2) (i.mom_hivstatus) (ib1.d_skill) if cc==1, vce(cluster subjid) or
 
 *alternate approach - mixed effects logistic regression with a random intercept by participant, get essentially same results
 // melogit preterm i.progid if cc==1 || subjid:, or
 
 *table 3: infant mortality (within 12 months)
+tab chldmort, missing
 tab chldmort if cc==1, missing
 tab hivflag if cc==1 & (chldmort==0|chldmort==1)
 
@@ -489,7 +520,7 @@ replace infant_anyart=1 if infant_art2==2 | infant_art2==3 | infant_art2==4 | in
 
 logit chldmort i.progid if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
 logit chldmort ib2.matage if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
-logit chldmort i.del_year_cat if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
+logit chldmort i.delivery_year_quartile if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
 logit chldmort ib2.edu_cat if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
 logit chldmort gravida if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
 logit chldmort para if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
@@ -501,13 +532,13 @@ logit chldmort i.preterm if cc==1 & (chldmort==0|chldmort==1), vce(cluster subji
 logit chldmort ib1.infant_anyart if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
 
 *fully adjusted model
-logit chldmort i.progid ib2.matage i.del_year_cat ib2.edu_cat gravida para ib2.era2 i.mom_hivstatus ib1.d_skill i.preterm i.infant_anyart if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
+logit chldmort i.progid ib2.matage i.delivery_year_quartile ib2.edu_cat gravida para ib2.era2 i.mom_hivstatus ib1.d_skill i.preterm i.infant_anyart if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
 
 *try backward stepwise selection
-stepwise, pr(.2) pe(.1): logit chldmort (i.progid) (ib2.matage) (i.del_year_cat) (ib2.edu_cat) gravida para (ib2.era2) (i.mom_hivstatus) (ib1.d_skill) (i.preterm) (ib1.infant_anyart) if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
+stepwise, pr(.2) pe(.1): logit chldmort (i.progid) (ib2.matage) (i.delivery_year_quartile) (ib2.edu_cat) gravida para (ib2.era2) (i.mom_hivstatus) (ib1.d_skill) (i.preterm) (ib1.infant_anyart) if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
 
 *force program site in the model
-stepwise, pr(.2) pe(.1) lockterm1: logit chldmort (i.progid) (ib2.matage) (i.del_year_cat) (ib2.edu_cat) gravida para (ib2.era2) (i.mom_hivstatus) (ib1.d_skill) (i.preterm) (ib1.infant_anyart) if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
+stepwise, pr(.2) pe(.1) lockterm1: logit chldmort (i.progid) (ib2.matage) (i.delivery_year_quartile) (ib2.edu_cat) gravida para (ib2.era2) (i.mom_hivstatus) (ib1.d_skill) (i.preterm) (ib1.infant_anyart) if cc==1 & (chldmort==0|chldmort==1), vce(cluster subjid) or
 
 *alternate approach - mixed effects logistic regression with a random intercept by participant, get essentially same results
 // melogit chldmort i.progid if cc==1 & (chldmort==0|chldmort==1) || subjid:, or
@@ -523,13 +554,3 @@ tab mom_hivstatus infant_anyart if cc==1, chi2 exact
 
 ranksum gravida, by(preterm)
 ranksum para, by(preterm)
-
-
-
-
-
-
-
-
-
-
